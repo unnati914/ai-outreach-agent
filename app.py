@@ -363,6 +363,27 @@ Map specific resume/profile items to those needs. Be honest about gaps.
 
 Only state facts you found or that were supplied. Do not invent metrics, relationships, or hiring plans. Do not include private or sensitive personal information."""
 
+TONE_GUIDES = {
+    "Unhinged (bold & memorable)": (
+        "Write like a sharp, funny builder who refuses to send a boring email. Open with a pattern-interrupt line that "
+        "could only be about this recipient (no 'I hope this finds you well'). Use self-aware humor, playful confidence, "
+        "short punchy sentences, and one slightly absurd-but-true line about the sender's work. The subject line should "
+        "make them curious enough to open it. It must still read as a real person who can do the job: no insults, no "
+        "profanity, no begging, no fake drama, and every claim stays true."
+    ),
+    "Warm and professional": "Warm, polished, and professional.",
+    "Direct and concise": "Direct and concise; no filler.",
+    "Friendly and conversational": "Friendly and conversational, like a note to a peer.",
+}
+
+def run_research(lead, profile, api_key, model):
+    brief = call_claude(
+        resume_blocks() + [{"type": "text", "text": research_prompt(lead, profile)}],
+        api_key, model, tools=RESEARCH_TOOLS,
+    )
+    update_lead(lead["id"], research=brief)
+    return brief
+
 def draft_prompt(lead, profile, attach_resume):
     attach_note = "The sender's resume will be attached to this email; mention it briefly." if attach_resume else "No resume is attached; do not claim one is."
     return f"""You are helping write one-to-one professional outreach. Return JSON with "subject" (empty for a DM) and "body".
@@ -372,8 +393,10 @@ Research brief on this lead (may be empty):
 {lead['research'] or '(none)'}
 Sender profile: {json.dumps(profile, ensure_ascii=False)}
 The sender's resume, if provided, is attached above.
+Voice: {TONE_GUIDES.get(profile.get('tone'), profile.get('tone'))}
 Rules:
-- Be specific, concise, honest, and human. Lead with one concrete hook from the research brief when there is one.
+- Be specific, honest, and human. Lead with one concrete hook from the research brief when there is one.
+- Show the sender's work, not adjectives: name 1-3 specific projects, products, or results from the resume (with their real numbers, if the resume has them) and tie each to something this recipient cares about.
 - Do not invent knowledge of the contact, product, hiring plans, follower count, campaign performance, or previous relationship.
 - Reference only experience that appears in the resume or sender profile.
 - For job leads with an email channel, write it as a short application: the role, 2-3 relevant proof points from the resume, and one idea the sender could build for them, framed as an offer. {attach_note}
@@ -415,7 +438,7 @@ with st.sidebar:
     )
     skills = st.text_area("Relevant skills / proof points", value=saved_profile.get("skills_and_proof_points", "Python, backend systems, GenAI, agentic AI, LLM applications, RAG, developer tools"), height=90)
     audience = st.text_area("Audience / sponsorship proof points", value=saved_profile.get("audience_proof_points", "Share current X follower count, average impressions, audience geography, engagement, and past campaign results here. Do not invent metrics."), height=90)
-    tones = ["Warm and professional", "Direct and concise", "Friendly and conversational"]
+    tones = list(TONE_GUIDES)
     tone = st.selectbox("Message tone", tones, index=tones.index(saved_profile["tone"]) if saved_profile.get("tone") in tones else 0)
     if st.button("Save profile"):
         set_setting("profile", json.dumps({
@@ -526,11 +549,7 @@ with leads_tab:
                         else:
                             with st.spinner("Claude is researching this lead on the web…"):
                                 try:
-                                    brief = call_claude(
-                                        resume_blocks() + [{"type": "text", "text": research_prompt(lead, profile)}],
-                                        api_key, model, tools=RESEARCH_TOOLS,
-                                    )
-                                    update_lead(lead["id"], research=brief)
+                                    run_research(lead, profile, api_key, model)
                                     st.session_state.pop(f"res_{lead['id']}", None)
                                     st.rerun()
                                 except Exception as e:
@@ -540,8 +559,13 @@ with leads_tab:
                             st.error("Add your Anthropic API key in the sidebar.")
                         else:
                             attach = lead["kind"] == "Job" and lead["channel"] == "Email" and bool(get_resume())
-                            content = resume_blocks() + [{"type": "text", "text": draft_prompt(lead, profile, attach)}]
+                            lead_data = dict(lead)
                             try:
+                                if not (lead_data.get("research") or "").strip():
+                                    with st.spinner("Researching this profile first…"):
+                                        lead_data["research"] = run_research(lead_data, profile, api_key, model)
+                                    st.session_state.pop(f"res_{lead['id']}", None)
+                                content = resume_blocks() + [{"type": "text", "text": draft_prompt(lead_data, profile, attach)}]
                                 with st.spinner("Writing draft…"):
                                     parsed = parse_json(call_claude(content, api_key, model, json_schema=DRAFT_SCHEMA))
                                 draft_id = save_draft(lead["id"], parsed.get("subject", ""), parsed.get("body", ""))
