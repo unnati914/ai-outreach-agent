@@ -575,7 +575,7 @@ with leads_tab:
 
 with draft_tab:
     st.subheader("Review, approve, and send")
-    st.warning("Nothing is sent automatically. X messages must be copied and sent manually. Email can be sent only after you approve it and configure SMTP.")
+    st.warning("Clicking Approve & send on an email draft sends it immediately to the address shown, so check the recipient and message first. X messages are copied and sent manually.")
     drafts = fetch_drafts()
     if not drafts:
         st.info("No drafts yet. Generate a draft from a lead.")
@@ -593,22 +593,53 @@ with draft_tab:
                 body_key = f"body_{draft['id']}"
                 subj = st.text_input("Subject", value=draft["subject"], key=subject_key) if draft["channel"] == "Email" else ""
                 body = st.text_area("Message", value=draft["body"], height=180, key=body_key)
-                c1, c2, c3 = st.columns(3)
+                is_email = draft["channel"] == "Email"
+                saved_resume = get_resume() if is_email else None
+                attach_resume = False
+                if is_email and saved_resume and not draft["sent_at"]:
+                    attach_resume = st.checkbox(
+                        f"Attach my resume ({saved_resume[0].upper()})",
+                        value=draft["kind"] == "Job", key=f"attach_{draft['id']}",
+                    )
+
+                def send_now():
+                    attachment_name = None
+                    if attach_resume:
+                        attachment_name = f"{(profile_name.strip() or 'My').replace(' ', '_')}_Resume.{saved_resume[0]}"
+                    try:
+                        send_email_smtp(
+                            draft["contact_email"], subj, body,
+                            attachment=saved_resume if attach_resume else None,
+                            attachment_name=attachment_name,
+                        )
+                        mark_sent(draft["id"], draft["lead_id"])
+                        st.success(f"Approved and sent to {draft['contact_email']}.")
+                    except Exception as e:
+                        st.error(f"Approved, but the email was not sent: {e}")
+
+                c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Save edits", key=f"save_{draft['id']}"):
+                    if not draft["sent_at"] and st.button("Save edits", key=f"save_{draft['id']}"):
                         set_draft(draft["id"], subject=subj, body=body)
                         st.success("Draft saved.")
                 with c2:
-                    approved_now = bool(draft["approved"])
-                    if not approved_now:
+                    if draft["sent_at"]:
+                        st.success(f"Sent at {draft['sent_at']}.")
+                    elif is_email and not draft["contact_email"]:
+                        st.error("Add a recipient email to this lead before approving.")
+                    elif is_email:
+                        label = "Retry send" if draft["approved"] else f"Approve & send to {draft['contact_email']}"
+                        if st.button(label, key=f"approve_{draft['id']}", type="primary"):
+                            set_draft(draft["id"], subject=subj, body=body, approved=1)
+                            update_lead(draft["lead_id"], status="Approved")
+                            send_now()
+                    elif not draft["approved"]:
                         if st.button("Approve this draft", key=f"approve_{draft['id']}", type="primary"):
                             set_draft(draft["id"], subject=subj, body=body, approved=1)
                             update_lead(draft["lead_id"], status="Approved")
-                            st.success("Approved. You can now send by email if configured, or copy the X DM manually.")
+                            st.success("Approved. Copy the message below and send it yourself.")
                     else:
                         st.success("Approved by you")
-                with c3:
-                    st.button("Copy message", key=f"copyhint_{draft['id']}", on_click=None, disabled=True, help="Select the text in the message box and copy it. Clipboard automation is not enabled in this MVP.")
                 if draft["channel"] == "X DM (manual)":
                     st.info("X DM is manual only: use the copy icon on the message below, open the profile, verify the recipient, and paste. This app does not automate X DMs.")
                     st.code(body, language=None, wrap_lines=True)
@@ -619,39 +650,6 @@ with draft_tab:
                             if st.button("Mark as sent", key=f"markx_{draft['id']}"):
                                 mark_sent(draft["id"], draft["lead_id"])
                                 st.success("Marked as sent.")
-                elif draft["channel"] == "Email":
-                    if not draft["approved"]:
-                        st.info("Approve the exact message before email sending is enabled.")
-                    elif draft["sent_at"]:
-                        st.success(f"Email marked sent at {draft['sent_at']}.")
-                    else:
-                        if not draft["contact_email"]:
-                            st.error("Add a recipient email to this lead before sending.")
-                        else:
-                            st.write("Email delivery requires SMTP credentials configured in your environment.")
-                            saved_resume = get_resume()
-                            attach_resume = False
-                            if saved_resume:
-                                attach_resume = st.checkbox(
-                                    f"Attach my resume ({saved_resume[0].upper()})",
-                                    value=draft["kind"] == "Job", key=f"attach_{draft['id']}",
-                                )
-                            confirm = st.checkbox(f"I approve sending this exact email to {draft['contact_email']}", key=f"confirmmail_{draft['id']}")
-                            if st.button("Send approved email", key=f"sendmail_{draft['id']}", type="primary", disabled=not confirm):
-                                try:
-                                    set_draft(draft["id"], subject=subj, body=body)
-                                    attachment_name = None
-                                    if attach_resume:
-                                        attachment_name = f"{(profile_name.strip() or 'My').replace(' ', '_')}_Resume.{saved_resume[0]}"
-                                    send_email_smtp(
-                                        draft["contact_email"], subj, body,
-                                        attachment=saved_resume if attach_resume else None,
-                                        attachment_name=attachment_name,
-                                    )
-                                    mark_sent(draft["id"], draft["lead_id"])
-                                    st.success("Email sent.")
-                                except Exception as e:
-                                    st.error(f"Email was not marked sent. Sending error: {e}")
 
 with data_tab:
     st.subheader("Import leads")
