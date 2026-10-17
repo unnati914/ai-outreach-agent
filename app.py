@@ -37,6 +37,9 @@ def is_local_request():
     return host in ("localhost", "127.0.0.1", "[::1]")
 
 def require_password():
+    # Set PASSWORD_REQUIRED="false" only when the app is private on Streamlit Cloud (viewers invited by email).
+    if cfg("PASSWORD_REQUIRED", "true").strip().lower() == "false":
+        return
     expected = cfg("APP_PASSWORD")
     if not expected:
         if is_local_request():
