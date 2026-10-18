@@ -364,12 +364,15 @@ Map specific resume/profile items to those needs. Be honest about gaps.
 Only state facts you found or that were supplied. Do not invent metrics, relationships, or hiring plans. Do not include private or sensitive personal information."""
 
 TONE_GUIDES = {
-    "Unhinged (bold & memorable)": (
-        "Write like a sharp, funny builder who refuses to send a boring email. Open with a pattern-interrupt line that "
-        "could only be about this recipient (no 'I hope this finds you well'). Use self-aware humor, playful confidence, "
-        "short punchy sentences, and one slightly absurd-but-true line about the sender's work. The subject line should "
-        "make them curious enough to open it. It must still read as a real person who can do the job: no insults, no "
-        "profanity, no begging, no fake drama, and every claim stays true."
+    "Bold & professional (attention-grabbing)": (
+        "Write like a confident senior professional who refuses to send a forgettable email: bold enough to stand out "
+        "in a crowded inbox, polished enough to forward to a hiring manager or CEO. Open with a sharp, specific line that "
+        "could only be about this recipient (their product, a recent launch, a real problem they have), never 'I hope "
+        "this finds you well' or 'My name is'. Follow with the sender's single most impressive, relevant result stated "
+        "plainly with its real number, then one concrete idea or offer for them. Short sentences, active voice, no "
+        "filler, no exclamation marks, at most one touch of dry wit. The subject line is specific and intriguing "
+        "(under 8 words, no clickbait or ALL CAPS). Close with one clear, low-effort ask, such as a 15-minute call. "
+        "Confident but respectful: no slang, no profanity, no gimmicks, no flattery, no begging, and every claim stays true."
     ),
     "Warm and professional": "Warm, polished, and professional.",
     "Direct and concise": "Direct and concise; no filler.",
